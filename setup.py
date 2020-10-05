@@ -31,5 +31,5 @@ setup(
     packages=['robotclean'],
     include_package_data=True,
     install_requires=['robotframework>=3.2.1'],
-    entry_points={'console_scripts': ['robotmaid=robotclean:run']}
+    entry_points={'console_scripts': ['robotclean=robotclean:run']}
 )
