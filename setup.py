@@ -1,6 +1,6 @@
 import pathlib
 from setuptools import setup
-from robocop.version import __version__
+from robotclean.__version__ import __version__
 
 
 HERE = pathlib.Path(__file__).parent

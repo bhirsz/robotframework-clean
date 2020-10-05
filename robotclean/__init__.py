@@ -1,5 +1,7 @@
 import argparse
+
 from robot.api import get_model
+
 from .code_formatters import SplitToMultiline, KeywordRenamer, AlignSelected, WhitespaceCleanup, TabsToSpaces
 
 
