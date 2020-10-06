@@ -1,6 +1,6 @@
 import ast
 from collections import defaultdict
-from robot.api import Token
+from robot.api import Token, get_model
 from robot.utils.misc import printable_name
 from robot.parsing.model import Statement, ForLoop
 from robot.parsing.model.statements import EmptyLine, Comment
@@ -119,44 +119,86 @@ class KeywordRenamer(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+class CollectColumnWidth(ModelVisitor):
+    def __init__(self, start_line, end_line):
+        self.start_line = start_line
+        self.end_line = end_line
+        self.columns = []
+
+    def visit_Statement(self, node):  # noqa
+        if node.end_lineno < self.start_line or node.lineno > self.end_line:
+            return
+        if node.type in ('DOCUMENTATION', 'FOR'):
+            return
+        tokens = [token for token in node.tokens
+                  if token.type not in ('SEPARATOR', 'CONTINUATION', 'EOL', 'EOS')]
+        for index, token in enumerate(tokens):
+            tok_len = len(token.value)
+            try:
+                self.columns[index] = max(self.columns[index], tok_len)
+            except IndexError:
+                self.columns.append(tok_len)
+
+    @staticmethod
+    def round_to_four(number):
+        div = number % 4
+        if div:
+            return number + 4 - div
+        return number
+
+    def align_to_tab_size(self):
+        self.columns = [self.round_to_four(column) for column in self.columns]
+
+
 class AlignSelected(ast.NodeVisitor):
-    def __init__(self, start_line, end_line, indent):
+    def __init__(self, start_line, end_line, indent, align_globally):
         self.start_line = start_line
         self.end_line = end_line
         self.indent = indent
+        self.align_globally = align_globally
+        self.global_look_up = []
+
+    def visit_File(self, node):  # noqa
+        if self.align_globally:
+            model = get_model(node.source)
+            column_widths = CollectColumnWidth(self.start_line, self.end_line)
+            column_widths.visit(model)
+            column_widths.align_to_tab_size()
+            self.global_look_up = column_widths.columns
+        self.generic_visit(node)
 
     def visit_TestCase(self, node):  # noqa
-        self.align(node, self.indent)
+        self.align(node, self.indent, self.align_globally)
 
     def visit_Keyword(self, node):  # noqa
-        self.align(node, self.indent)
+        self.align(node, self.indent, self.align_globally)
 
     @staticmethod
     def get_longest(matrix, index):
         longest = max(len(r[index].value) for r in matrix if len(r) > index)
-        div = longest % 4
-        if div:
-            longest += 4 - div
-        return longest
+        return CollectColumnWidth.round_to_four(longest)
 
-    def align(self, node, indent):
+    def align(self, node, indent, use_global_lookup):
         if node.end_lineno < self.start_line or node.lineno > self.end_line:
             return
         statements = []
         for child in node.body:
             if isinstance(child, ForLoop):
-                self.align(child, indent * 2)
+                self.align(child, indent * 2, False)
                 statements.append(child)
             elif child.type == 'DOCUMENTATION' or self.start_line > child.lineno or self.end_line < child.lineno:
                 statements.append(child)
             else:
                 statements.append([token for token in child.tokens
                                    if token.type not in ('SEPARATOR', 'CONTINUATION', 'EOL', 'EOS')])
-        misaligned_stat = [st for st in statements if isinstance(st, list)]
-        if not misaligned_stat:
-            return
-        col_len = max(len(c) for c in misaligned_stat)
-        look_up = [self.get_longest(misaligned_stat, i) for i in range(col_len)]
+        if not use_global_lookup:
+            misaligned_stat = [st for st in statements if isinstance(st, list)]
+            if not misaligned_stat:
+                return
+            col_len = max(len(c) for c in misaligned_stat)
+            look_up = [self.get_longest(misaligned_stat, i) for i in range(col_len)]
+        else:
+            look_up = self.global_look_up
         node.body = list(self.align_rows(statements, indent, look_up))
 
     def align_rows(self, statements, indent, look_up):
