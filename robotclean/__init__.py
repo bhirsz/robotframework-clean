@@ -18,12 +18,13 @@ def run():
     parser.add_argument('-i', '--ignore', help='List of keyword names to ignore')
     parser.add_argument('--indent', default=4, type=int)
     parser.add_argument('--separator', default=4, type=int)
+    parser.add_argument('--align-globally', default=False, type=bool)
     args = parser.parse_args()
 
     formatters = {
         'split': SplitToMultiline(args.line, args.end_line, args.separator),
         'rename': KeywordRenamer(args.ignore),
-        'align': AlignSelected(args.line, args.end_line, args.indent),
+        'align': AlignSelected(args.line, args.end_line, args.indent, args.align_globally),
         'tabs_to_spaces': TabsToSpaces(),
         'whitespace': WhitespaceCleanup()
     }
