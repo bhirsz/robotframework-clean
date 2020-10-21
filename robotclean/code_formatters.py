@@ -2,7 +2,7 @@ import ast
 from collections import defaultdict
 from robot.api import Token, get_model
 from robot.utils.misc import printable_name
-from robot.parsing.model import Statement, ForLoop
+from robot.parsing.model import Statement, ForLoop, KeywordSection, TestCaseSection
 from robot.parsing.model.statements import EmptyLine, Comment
 from robot.parsing.model.visitor import ModelVisitor
 
@@ -239,8 +239,12 @@ class WhitespaceCleanup(ast.NodeVisitor):
         ])
 
     @staticmethod
+    def is_keyword_or_tests_section(section):
+        return isinstance(section, (KeywordSection, TestCaseSection))
+
+    @staticmethod
     def trim_trailing_empty_lines(node):
-        while node.body and isinstance(node.body[-1], EmptyLine):
+        while hasattr(node, 'body') and node.body and isinstance(node.body[-1], EmptyLine):
             node.body.pop()
 
     @staticmethod
@@ -252,6 +256,10 @@ class WhitespaceCleanup(ast.NodeVisitor):
         self.generic_visit(node)
         if node.sections and node.sections[-1].body:
             self.trim_trailing_empty_lines(node.sections[-1])
+            self.trim_trailing_empty_lines(node.sections[-1].body[-1])
+            if not self.is_keyword_or_tests_section(node.sections[-1]):
+                node.sections[-1].body[-1].tokens = node.sections[-1].body[-1].tokens[:-1] + (Token(Token.EOL, '\n'),)
+
         node.sections = [section for section in node.sections if not self.only_empty_lines(section)]
 
     @staticmethod
