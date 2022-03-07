@@ -1,3 +1,5 @@
+
+    This repository is deprecated by new https://github.com/MarketSquare/robotframework-tidy
 Robot Clean
 ===============
 
